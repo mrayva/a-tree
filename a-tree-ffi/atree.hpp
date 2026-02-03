@@ -210,6 +210,7 @@ struct AttributeDefinition {
 // ============================================================================
 
 class Tree;
+class TreeBuilder;
 class EventBuilder;
 
 // ============================================================================
@@ -368,6 +369,61 @@ private:
 };
 
 // ============================================================================
+// TreeBuilder - Fluent API for building Trees
+// ============================================================================
+
+/// @brief Fluent builder for creating A-Trees
+class TreeBuilder {
+private:
+    std::vector<AttributeDefinition> definitions_;
+
+public:
+    TreeBuilder() = default;
+
+    /// @brief Add a boolean attribute
+    TreeBuilder& with_boolean(std::string name) {
+        definitions_.push_back(AttributeDefinition::boolean(std::move(name)));
+        return *this;
+    }
+
+    /// @brief Add an integer attribute
+    TreeBuilder& with_integer(std::string name) {
+        definitions_.push_back(AttributeDefinition::integer(std::move(name)));
+        return *this;
+    }
+
+    /// @brief Add a float attribute
+    TreeBuilder& with_float(std::string name) {
+        definitions_.push_back(AttributeDefinition::float_attr(std::move(name)));
+        return *this;
+    }
+
+    /// @brief Add a string attribute
+    TreeBuilder& with_string(std::string name) {
+        definitions_.push_back(AttributeDefinition::string(std::move(name)));
+        return *this;
+    }
+
+    /// @brief Add a string list attribute
+    TreeBuilder& with_string_list(std::string name) {
+        definitions_.push_back(AttributeDefinition::string_list(std::move(name)));
+        return *this;
+    }
+
+    /// @brief Add an integer list attribute
+    TreeBuilder& with_integer_list(std::string name) {
+        definitions_.push_back(AttributeDefinition::integer_list(std::move(name)));
+        return *this;
+    }
+
+    /// @brief Build the tree (throws on error)
+    Tree build() &&;
+
+    /// @brief Build the tree (returns Result)
+    Result<Tree> try_build() &&;
+};
+
+// ============================================================================
 // Tree - Main A-Tree container
 // ============================================================================
 
@@ -424,11 +480,31 @@ public:
         return *this;
     }
 
-    /// @brief Insert a boolean expression with an associated subscription ID
+    /// @brief Create a TreeBuilder for fluent tree construction
+    static TreeBuilder builder() {
+        return TreeBuilder();
+    }
+
+    /// @brief Insert a boolean expression (throws on error)
+    /// @param subscription_id Unique identifier for this subscription
+    /// @param expression Boolean expression string
+    /// @throws Error if insertion fails
+    void insert(uint64_t subscription_id, std::string_view expression) {
+        AtreeResult result = atree_insert(
+            handle_, subscription_id, std::string(expression).c_str());
+
+        if (!result.success) {
+            std::string error_msg = result.error_message;
+            atree_free_error(result.error_message);
+            throw Error(error_msg);
+        }
+    }
+
+    /// @brief Insert a boolean expression (returns Result)
     /// @param subscription_id Unique identifier for this subscription
     /// @param expression Boolean expression string
     /// @return Result indicating success or failure
-    Result<void> insert(uint64_t subscription_id, std::string_view expression) {
+    Result<void> try_insert(uint64_t subscription_id, std::string_view expression) {
         AtreeResult result = atree_insert(
             handle_, subscription_id, std::string(expression).c_str());
 
@@ -454,10 +530,32 @@ public:
         return EventBuilder(builder);
     }
 
-    /// @brief Search for expressions that match the given event
+    /// @brief Search for expressions (throws on error)
+    /// @param builder EventBuilder containing the event data (consumed by this call)
+    /// @return Vector of matching subscription IDs
+    std::vector<uint64_t> search(EventBuilder& builder) const {
+        AtreeSearchResult result = atree_search(handle_, builder.release());
+
+        std::vector<uint64_t> matches;
+        if (result.ids != nullptr && result.count > 0) {
+            matches.assign(result.ids, result.ids + result.count);
+            atree_search_result_free(result);
+        }
+
+        return matches;
+    }
+
+    /// @brief Search for expressions (rvalue overload, throws on error)
+    /// @param builder EventBuilder containing the event data (consumed by this call)
+    /// @return Vector of matching subscription IDs
+    std::vector<uint64_t> search(EventBuilder&& builder) const {
+        return search(builder);
+    }
+
+    /// @brief Search for expressions (returns Result)
     /// @param builder EventBuilder containing the event data (consumed by this call)
     /// @return Result containing vector of matching subscription IDs
-    Result<std::vector<uint64_t>> search(EventBuilder& builder) const {
+    Result<std::vector<uint64_t>> try_search(EventBuilder& builder) const {
         AtreeSearchResult result = atree_search(handle_, builder.release());
 
         std::vector<uint64_t> matches;
@@ -469,16 +567,30 @@ public:
         return Result<std::vector<uint64_t>>::ok(std::move(matches));
     }
 
-    /// @brief Search for expressions that match the given event (rvalue overload)
+    /// @brief Search for expressions (rvalue overload, returns Result)
     /// @param builder EventBuilder containing the event data (consumed by this call)
     /// @return Result containing vector of matching subscription IDs
-    Result<std::vector<uint64_t>> search(EventBuilder&& builder) const {
-        return search(builder);
+    Result<std::vector<uint64_t>> try_search(EventBuilder&& builder) const {
+        return try_search(builder);
     }
 
-    /// @brief Export the tree structure as Graphviz DOT format
+    /// @brief Export the tree structure as Graphviz DOT format (throws on error)
+    /// @return DOT format string
+    /// @throws Error if export fails
+    std::string to_graphviz() const {
+        char* dot = atree_to_graphviz(handle_);
+        if (!dot) {
+            throw Error("Failed to generate Graphviz output");
+        }
+
+        std::string result(dot);
+        atree_free_string(dot);
+        return result;
+    }
+
+    /// @brief Export the tree structure as Graphviz DOT format (returns Result)
     /// @return Result containing DOT format string
-    Result<std::string> to_graphviz() const {
+    Result<std::string> try_to_graphviz() const {
         char* dot = atree_to_graphviz(handle_);
         if (!dot) {
             return Result<std::string>::err("Failed to generate Graphviz output");
@@ -489,6 +601,22 @@ public:
         return Result<std::string>::ok(std::move(result));
     }
 };
+
+// ============================================================================
+// TreeBuilder Implementation
+// ============================================================================
+
+inline Tree TreeBuilder::build() && {
+    return Tree(std::move(definitions_));
+}
+
+inline Result<Tree> TreeBuilder::try_build() && {
+    try {
+        return Result<Tree>::ok(Tree(std::move(definitions_)));
+    } catch (const Error& e) {
+        return Result<Tree>::err(e.what());
+    }
+}
 
 // ============================================================================
 // Convenience Functions

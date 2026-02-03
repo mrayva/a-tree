@@ -40,16 +40,16 @@ int main() {
         print_separator("Inserting Expressions");
 
         // Simple expressions that we know work
-        tree.insert(1, "is_active and user_id > 100").unwrap();
+        tree.insert(1, "is_active and user_id > 100");
         std::cout << "✓ Inserted subscription 1: 'is_active and user_id > 100'\n";
 
-        tree.insert(2, "price >= 50.0 and price <= 100.0").unwrap();
+        tree.insert(2, "price >= 50.0 and price <= 100.0");
         std::cout << "✓ Inserted subscription 2: 'price >= 50.0 and price <= 100.0'\n";
 
-        tree.insert(3, "country = \"US\"").unwrap();
+        tree.insert(3, "country = \"US\"");
         std::cout << "✓ Inserted subscription 3: 'country = \"US\"'\n";
 
-        tree.insert(4, "price > 25.0").unwrap();
+        tree.insert(4, "price > 25.0");
         std::cout << "✓ Inserted subscription 4: 'price > 25.0'\n";
 
         // ====================================================================
@@ -63,7 +63,7 @@ int main() {
                 .with_undefined("country")
                 .with_undefined("tags")
                 .with_undefined("categories")
-        ).unwrap();
+        );
 
         std::cout << "Event: is_active=true, user_id=150, others undefined\n";
         std::cout << "Found " << matches1.size() << " match(es): ";
@@ -81,7 +81,7 @@ int main() {
                 .with_undefined("country")
                 .with_undefined("tags")
                 .with_undefined("categories")
-        ).unwrap();
+        );
 
         std::cout << "Event: price=75.50 (auto-converted to decimal)\n";
         std::cout << "Found " << matches2.size() << " match(es): ";
@@ -100,7 +100,7 @@ int main() {
                 .with_undefined("country")
                 .with_undefined("tags")
                 .with_undefined("categories")
-        ).unwrap();
+        );
 
         std::cout << "Event: price=60.00 (precise decimal: 6000, scale: 2)\n";
         std::cout << "Found " << matches3.size() << " match(es): ";
@@ -118,7 +118,7 @@ int main() {
                 .with_undefined("price")
                 .with_undefined("tags")
                 .with_undefined("categories")
-        ).unwrap();
+        );
 
         std::cout << "Event: country=\"US\", others undefined\n";
         std::cout << "Found " << matches4.size() << " match(es): ";
@@ -136,7 +136,7 @@ int main() {
                 .with_undefined("user_id")
                 .with_undefined("price")
                 .with_undefined("country")
-        ).unwrap();
+        );
 
         std::cout << "Event: tags=[\"featured\", \"sale\", \"new\"], categories=[10, 42, 99]\n";
         std::cout << "Found " << matches5.size() << " match(es): ";
@@ -157,7 +157,7 @@ int main() {
                 .with_undefined("price")
                 .with_undefined("tags")
                 .with_undefined("categories")
-        ).unwrap();
+        );
 
         std::cout << "\nSearching again for country=\"US\":\n";
         std::cout << "Found " << matches6.size() << " match(es): ";
@@ -167,27 +167,21 @@ int main() {
         // ====================================================================
         print_separator("Graphviz Export");
 
-        auto graphviz_result = tree.to_graphviz();
-        if (graphviz_result) {
-            const auto& dot = graphviz_result.unwrap();
-            std::cout << "✓ Generated Graphviz DOT format (" << dot.length() << " bytes)\n";
-            std::cout << "\nFirst 300 characters:\n";
-            std::cout << dot.substr(0, std::min<size_t>(300, dot.length()));
-            if (dot.length() > 300) {
-                std::cout << "...";
-            }
-            std::cout << "\n\nTo visualize, save to a file and run:\n";
-            std::cout << "  dot -Tpng tree.dot -o tree.png\n";
-        } else {
-            std::cerr << "✗ Failed to generate Graphviz: "
-                      << graphviz_result.error() << "\n";
+        auto dot = tree.to_graphviz();
+        std::cout << "✓ Generated Graphviz DOT format (" << dot.length() << " bytes)\n";
+        std::cout << "\nFirst 300 characters:\n";
+        std::cout << dot.substr(0, std::min<size_t>(300, dot.length()));
+        if (dot.length() > 300) {
+            std::cout << "...";
         }
+        std::cout << "\n\nTo visualize, save to a file and run:\n";
+        std::cout << "  dot -Tpng tree.dot -o tree.png\n";
 
         // ====================================================================
         print_separator("Error Handling Example");
 
-        // Try to insert an invalid expression
-        auto invalid_result = tree.insert(999, "this is not a valid expression!");
+        // Try to insert an invalid expression (use try_insert for Result-based handling)
+        auto invalid_result = tree.try_insert(999, "this is not a valid expression!");
         if (invalid_result.is_err()) {
             std::cout << "✓ Correctly caught error: " << invalid_result.error() << "\n";
         }

@@ -2,6 +2,8 @@
 /target/
 example_c
 example_cpp
+example_advanced_cpp
+example_fluent_cpp
 
 # Generated header is committed but can be regenerated
 # atree.h
